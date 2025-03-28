@@ -28,7 +28,7 @@ A powerful and secure Solana-based trading bot for Discord, enabling real-time S
 ### Steps
 1. Clone the repository:
    ```sh
-   git clone https://github.com/your-username/galactic.git
+   git clone https://github.com/kmanish1/galactic_bot.git
    cd galactic
    ```
 2. Install dependencies:
