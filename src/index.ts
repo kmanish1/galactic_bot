@@ -11,7 +11,7 @@ import { commands } from "./commands";
 import { formatPortfolioMessage, getTokenBalances } from "./solana/tokens";
 import { connection } from "./data";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { transferSOl } from "./solana/transfer";
+import { transferSol } from "./solana/transfer";
 import { privy, privysign } from "./privy";
 import { getTokenDecimals, swap } from "./solana/swap";
 import dotenv from "dotenv";
@@ -107,58 +107,102 @@ client.on("interactionCreate", async (interaction: Interaction) => {
         break;
 
       case "transfer":
-        await interaction.deferReply();
+        try {
+          await interaction.deferReply();
 
-        if (!wallet) {
-          return interaction.reply({
-            content: "Please log in first using `/login`.",
+          if (!wallet) {
+            return interaction.reply({
+              content: "Please log in first using `/login`.",
+            });
+          }
+
+          const toAddress = options.data[0].value;
+          const amount = options.data[1].value;
+
+          if (
+            !toAddress ||
+            !amount ||
+            isNaN(Number(amount)) ||
+            Number(amount) <= 0
+          ) {
+            return interaction.editReply({
+              content:
+                "Invalid recipient address or amount. Please check your input.",
+            });
+          }
+
+          const transaction = await transferSol(
+            new PublicKey(wallet.solAddress),
+            new PublicKey(toAddress as string),
+            Number(amount)
+          );
+
+          if (!transaction) {
+            return interaction.editReply({
+              content: "Transaction creation failed. Please try again later.",
+            });
+          }
+
+          const signature = await privysign(wallet.privyId, transaction);
+          if (!signature) {
+            return interaction.editReply({
+              content:
+                "Transaction signing failed. Please check your wallet and try again.",
+            });
+          }
+
+          const url = `https://solscan.io/tx/${signature}`;
+          await interaction.editReply({ content: url });
+        } catch (error) {
+          console.error("Error processing transfer command:", error);
+          await interaction.editReply({
+            content:
+              "An error occurred while processing your transfer. Please try again later.",
           });
         }
-
-        const toAddress = options.data[0].value;
-        const amount = options.data[1].value;
-
-        const transaction = await transferSOl(
-          new PublicKey(wallet.solAddress),
-          new PublicKey(toAddress as string),
-          Number(amount)
-        );
-
-        const signature = await privysign(wallet.privyId, transaction);
-        const url = `https://solscan.io/tx/${signature}`;
-
-        await interaction.editReply({
-          content: url,
-        });
         break;
 
       case "swap":
         await interaction.deferReply();
 
-        if (!wallet) {
-          return interaction.reply({
-            content: "Please log in first using `/login`.",
+        try {
+          if (!wallet) {
+            return interaction.reply({
+              content: "Please log in first using `/login`.",
+            });
+          }
+
+          const input_mint = options.data[0].value;
+          const output_mint = options.data[1].value;
+          const quantity = options.data[2].value;
+          const decimals = await getTokenDecimals(
+            new PublicKey(input_mint as string)
+          );
+
+          const tx = await swap(
+            new PublicKey(wallet.solAddress),
+            input_mint as string,
+            output_mint as string,
+            Number(quantity) * Math.pow(10, decimals)
+          );
+
+          if (!tx) {
+            return interaction.editReply({
+              content: "Swap transaction failed. Please try again.",
+            });
+          }
+
+          const sign = await privysign(wallet.privyId, tx);
+          await interaction.editReply({
+            content: `https://solscan.io/tx/${sign}`,
+          });
+        } catch (error) {
+          console.error("Error processing swap command:", error);
+          await interaction.editReply({
+            content:
+              "An error occurred while processing your swap request. Please try again later.",
           });
         }
-
-        const input_mint = options.data[0].value;
-        const output_mint = options.data[1].value;
-        const quantity = options.data[2].value;
-        const decimals = await getTokenDecimals(
-          new PublicKey(input_mint as string)
-        );
-
-        const tx = await swap(
-          new PublicKey(wallet.solAddress),
-          input_mint as string,
-          output_mint as string,
-          Number(quantity) * Math.pow(10, decimals)
-        );
-
-        const sign = await privysign(wallet.privyId, tx);
-        await interaction.editReply({
-          content: `https://solscan.io/tx/${sign}`,
-        });
     }
   } catch (e) {
     console.error(e);

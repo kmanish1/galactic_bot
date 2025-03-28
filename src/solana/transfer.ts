@@ -6,12 +6,16 @@ import {
 } from "@solana/web3.js";
 import { connection } from "../data";
 
-export async function transferSOl(
+export async function transferSol(
   from: PublicKey,
   to: PublicKey,
-  amount: number,
+  amount: number
 ) {
   try {
+    if (!from || !to || isNaN(amount) || amount <= 0) {
+      throw new Error("Invalid sender, recipient, or amount.");
+    }
+
     const ix = SystemProgram.transfer({
       fromPubkey: from,
       toPubkey: to,
@@ -20,6 +24,10 @@ export async function transferSOl(
 
     const { blockhash, lastValidBlockHeight } =
       await connection.getLatestBlockhash();
+
+    if (!blockhash || !lastValidBlockHeight) {
+      throw new Error("Failed to fetch latest blockhash.");
+    }
 
     const tx = new Transaction({
       blockhash,
@@ -30,7 +38,8 @@ export async function transferSOl(
     tx.add(ix);
 
     return tx;
-  } catch (Err) {
-    console.error(Err);
+  } catch (error) {
+    console.error("Error creating transfer transaction:", error);
+    return null;
   }
 }
